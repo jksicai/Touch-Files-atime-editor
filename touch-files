@@ -1,0 +1,78 @@
+Param ([Parameter(Mandatory=$true)] [string]$Path)
+
+function Ignore-File($fileInfo)
+{
+    return ($fileInfo.Attributes -band [IO.FileAttributes]::Offline) -or ($fileInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)
+}
+
+function Touch-File($fileInfo)
+{
+    $readOnly = $false
+    Try
+    {
+        if (Ignore-File($fileInfo))
+        {
+            return
+        }
+        $readOnly = $fileInfo.IsReadOnly
+        if ($readOnly)
+        {
+            $fileInfo.IsReadOnly = $false
+        }
+        $fileInfo.LastAccessTime = get-date "1/1/2010 11:31:23 AM"
+        $fileInfo.LastWriteTime = get-date "7/4/1999 05:12:44 PM"
+        $fileInfo.FullName
+    }
+    Catch
+    {
+        $_.Exception.Message
+    }
+    Finally
+    {
+        if ($readOnly)
+        {
+            $fileInfo.IsReadOnly = $true
+        }
+    }
+}
+
+function Process-Directory($dirInfo)
+{
+    Try
+    {
+        if ($dirInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)
+        {
+            return
+        }
+        $files = $dirInfo.GetFiles()
+        foreach ($fileInfo in $files)
+        {
+            Touch-File($fileInfo)
+        }
+        $subdirs = $dirInfo.GetDirectories()
+        foreach ($subdirInfo in $subdirs)
+        {
+            Process-Directory($subdirInfo)
+        }
+    }
+    Catch
+    {
+        $_.Exception.Message
+    }
+}
+
+function Process-Path($Path)
+{
+    $pathInfo = Get-Item $Path
+    if ($pathInfo.Attributes -band [IO.FileAttributes]::Directory)
+    {
+        Process-Directory($pathInfo)
+    }
+    else
+    {
+        Touch-File($pathInfo)
+    }
+    ""
+}
+
+Process-Path($Path)
